@@ -1,0 +1,82 @@
+---
+kind: pipeline
+type: kubernetes
+name: Test
+
+platform:
+    os: linux
+    arch: arm
+
+steps:
+  - name: golang:test
+    image: golang:1.18-stretch
+    commands:
+      # 'go test -race ...' not supported on ARM
+      - go test -parallel=2 -v -coverprofile cover.out -count=1 ./...
+
+  - name: golang:coverage:report
+    image: golang:1.18-stretch
+    commands:
+      - go tool cover -func cover.out
+
+  - name: golang:build
+    image: golang:1.18-stretch
+    commands:
+      - go build -o test example/example.go
+
+  - name: golang:run
+    image: golang:1.18-stretch
+    commands:
+      # Note: This command is expected to fail
+      - >-
+        ! ./test
+
+---
+kind: pipeline
+type: kubernetes
+name: Notify Status
+
+clone:
+  disable: true
+
+trigger:
+  status:
+  - success
+  - failure
+
+depends_on:
+- Test
+
+platform:
+  os: linux
+  arch: arm
+
+steps:
+  - name: discord:notification
+    image: appleboy/drone-discord
+    settings:
+      webhook_id:
+        from_secret: discord_id
+      webhook_token:
+        from_secret: discord_token
+      username: drone.io
+      color: auto
+      message: >
+        :hook: **{{repo.name}}**
+
+        {{#success build.status}}
+        :white_check_mark: {{build.event}} build {{build.number}} succeeded. Good job.
+        {{else}}
+        :warning: {{build.event}} build {{build.number}} failed. Fix me please.
+        {{/success}}
+
+        {{build.link}}
+
+        **Branch:** {{commit.branch}} {{commit.tag}}
+
+        **Message:** {{commit.message}}
+---
+kind: signature
+hmac: 5b926b145f02081d033c6bca3bc7b8a85f0162bab96bc607d72ff2ca5a83f434
+
+...
