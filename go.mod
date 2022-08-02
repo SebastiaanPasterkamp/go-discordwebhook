@@ -1,3 +1,3 @@
 module github.com/SebastiaanPasterkamp/go-discordwebhook
 
-go 1.18
+go 1.19
